@@ -1,10 +1,8 @@
-#[derive(Clone)]
 pub struct Rgba(pub u8, pub u8, pub u8, pub u8);
 
 impl Rgba {
     pub const WHITE: Self = Self(0xff, 0xff, 0xff, 0xff);
     pub const BLACK: Self = Self(0x0, 0x0, 0x0, 0xff);
-    pub const TRANSPARENT: Self = Self(0x0, 0x0, 0x0, 0x0);
     pub const ORANGE: Self = Self(0xff, 0x88, 0x0, 0xff);
     pub const RED: Self = Self(0xff, 0x0, 0x0, 0xff);
     pub const BLUE: Self = Self(0x00, 0x33, 0xff, 0xff);
@@ -67,7 +65,17 @@ pub struct Size<T> {
 }
 
 impl<T> Size<T> {
-    pub fn new(w: T, h: T) -> Self {
+    #[inline]
+    pub const fn new(w: T, h: T) -> Self {
         Self { w, h }
     }
+}
+
+#[macro_export]
+macro_rules! match_key_pressed {
+    ($input:expr, $($key:expr => $action:expr),*) => {
+        $(if $input.key_pressed($key) {
+            $action;
+        })*
+    };
 }

@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use game_of_life::{MixedRgba, Rgba, Size};
+use game_of_life::{match_key_pressed, MixedRgba, Rgba, Size};
 use pixels::{Pixels, SurfaceTexture};
 use rand::Rng;
 use winit::{
@@ -84,38 +84,10 @@ fn main() {
                 *control_flow = ControlFlow::Exit;
                 return;
             }
-            if input.key_pressed(VirtualKeyCode::Space) {
-                world.toggle_running();
-            }
-            if input.key_pressed(VirtualKeyCode::C) {
-                world.pause();
-                world.cells.clear();
-            }
-            if input.key_pressed(VirtualKeyCode::S) {
-                if world.tick_len > Duration::from_secs_f64(1.) {
-                    world.tick_len += Duration::from_secs_f64(1.);
-                } else if world.tick_len > Duration::from_secs_f64(0.5) {
-                    world.tick_len += Duration::from_secs_f64(0.5);
-                } else {
-                    world.tick_len += Duration::from_secs_f64(0.05);
-                }
-            }
-            if input.key_pressed(VirtualKeyCode::W) {
-                if world.tick_len > Duration::from_secs_f64(1.) {
-                    world.tick_len -= Duration::from_secs_f64(1.);
-                } else if world.tick_len > Duration::from_secs_f64(0.5) {
-                    world.tick_len -= Duration::from_secs_f64(0.5);
-                } else if world.tick_len > Duration::from_secs_f64(0.05) {
-                    world.tick_len -= Duration::from_secs_f64(0.05);
-                } else if world.tick_len > Duration::from_secs_f64(0.001) {
-                    world.tick_len -= Duration::from_secs_f64(0.001);
-                }
-            }
-
+            
             let (mx, my): (isize, isize) = input
                 .mouse()
                 .map(|(mx, my)| {
-                    // let (dx, dy) = input.mouse_diff();
                     let (mx_i, my_i) = pixels
                         .window_pos_to_pixel((mx, my))
                         .unwrap_or_else(|pos| pixels.clamp_pixel_pos(pos));
@@ -130,28 +102,23 @@ fn main() {
                 world.cells.make_dead(my, mx);
             }
 
-            if input.key_pressed(VirtualKeyCode::Key0) {
-                world.heat_color = MixedRgba(Rgba::BLACK, Rgba::BLACK);
-            }
-            if input.key_pressed(VirtualKeyCode::Key1) {
-                world.heat_color = MixedRgba(Rgba::BLUE.with_alpha(0), Rgba::CYAN);
-            }
-            if input.key_pressed(VirtualKeyCode::Key2) {
-                world.heat_color = MixedRgba(Rgba::RED.with_alpha(0), Rgba::ORANGE);
-            }
-            if input.key_pressed(VirtualKeyCode::Key3) {
-                world.heat_color = MixedRgba(Rgba::GREEN.with_alpha(0), Rgba::YELLOW);
-            }
-            if input.key_pressed(VirtualKeyCode::Key4) {
-                world.heat_color = MixedRgba(Rgba::BLUE.with_alpha(0), Rgba::PURPLE);
-            }
-            if input.key_pressed(VirtualKeyCode::Key5) {
-                world.heat_color = MixedRgba(Rgba::PURPLE.with_alpha(0), Rgba::PINK);
-            }
-            if input.key_pressed(VirtualKeyCode::Key6) {
-                world.heat_color = MixedRgba(Rgba::TEAL.with_alpha(0), Rgba::GREEN);
-            }
-
+            match_key_pressed!(input,
+                VirtualKeyCode::Key0 => world.heat_color = MixedRgba(Rgba::BLACK, Rgba::BLACK),
+                VirtualKeyCode::Key1 => world.heat_color = MixedRgba(Rgba::BLUE.with_alpha(0), Rgba::CYAN),
+                VirtualKeyCode::Key2 => world.heat_color = MixedRgba(Rgba::RED.with_alpha(0), Rgba::ORANGE),
+                VirtualKeyCode::Key3 => world.heat_color = MixedRgba(Rgba::GREEN.with_alpha(0), Rgba::YELLOW),
+                VirtualKeyCode::Key4 => world.heat_color = MixedRgba(Rgba::BLUE.with_alpha(0), Rgba::PURPLE),
+                VirtualKeyCode::Key5 => world.heat_color = MixedRgba(Rgba::PURPLE.with_alpha(0), Rgba::PINK),
+                VirtualKeyCode::Key6 => world.heat_color = MixedRgba(Rgba::TEAL.with_alpha(0), Rgba::GREEN),
+                VirtualKeyCode::Space => world.toggle_running(),
+                VirtualKeyCode::S => world.slow_down(),    
+                VirtualKeyCode::W => world.speed_up(),
+                VirtualKeyCode::C => { 
+                    world.pause();
+                    world.cells.clear();
+                }
+            );
+            
             if let Some(size) = input.window_resized() {
                 if pixels.resize_surface(size.width, size.height).is_err() {
                     *control_flow = ControlFlow::Exit;
@@ -185,8 +152,8 @@ struct Cells {
 }
 
 impl Cells {
-    // returns 1 if cell is alive else 0
-    fn is_alive_usize(&self, i: isize, j: isize) -> usize {
+    /// returns 1 if cell is alive, else 0
+    fn is_alive_u8(&self, i: isize, j: isize) -> u8 {
         match self.vec.get(i as usize) {
             Some(row) => match row.get(j as usize) {
                 Some(c) => match c {
@@ -199,7 +166,7 @@ impl Cells {
         }
     }
     fn is_alive(&self, i: isize, j: isize) -> bool {
-        self.is_alive_usize(i, j) == 1
+        self.is_alive_u8(i, j) == 1
     }
     fn make_alive(&mut self, i: isize, j: isize) {
         match self.vec.get_mut(i as usize) {
@@ -225,16 +192,16 @@ impl Cells {
             None => (),
         };
     }
-    fn alive_neighbors(&self, i: isize, j: isize) -> usize {
+    fn alive_neighbors(&self, i: isize, j: isize) -> u8 {
         let mut count = 0;
-        count += self.is_alive_usize(i - 1, j - 1);
-        count += self.is_alive_usize(i - 1, j - 0);
-        count += self.is_alive_usize(i - 1, j + 1);
-        count += self.is_alive_usize(i - 0, j - 1);
-        count += self.is_alive_usize(i - 0, j + 1);
-        count += self.is_alive_usize(i + 1, j - 1);
-        count += self.is_alive_usize(i + 1, j - 0);
-        count += self.is_alive_usize(i + 1, j + 1);
+        count += self.is_alive_u8(i - 1, j - 1);
+        count += self.is_alive_u8(i - 1, j - 0);
+        count += self.is_alive_u8(i - 1, j + 1);
+        count += self.is_alive_u8(i - 0, j - 1);
+        count += self.is_alive_u8(i - 0, j + 1);
+        count += self.is_alive_u8(i + 1, j - 1);
+        count += self.is_alive_u8(i + 1, j - 0);
+        count += self.is_alive_u8(i + 1, j + 1);
 
         count
     }
@@ -330,14 +297,32 @@ impl World {
     fn run(&mut self) {
         self.state = WorldState::Running;
     }
+    fn speed_up(&mut self) {
+        type D = Duration;
+        self.tick_len -= match self.tick_len {
+            t if t > D::from_secs_f64(1.) => D::from_secs_f64(1.),
+            t if t > D::from_secs_f64(0.5) => D::from_secs_f64(0.5),
+            t if t > D::from_secs_f64(0.05) => D::from_secs_f64(0.05),
+            t if t > D::from_secs_f64(0.001) => D::from_secs_f64(0.001),
+            _ => D::ZERO,
+        };
+    }
+    fn slow_down(&mut self) {
+        type D = Duration;
+        self.tick_len += match self.tick_len {
+            t if t > D::from_secs_f64(1.) => D::from_secs_f64(1.),
+            t if t > D::from_secs_f64(0.5) => D::from_secs_f64(0.5),
+            _ => D::from_secs_f64(0.05),
+        };
+    }
 }
 
 fn draw(world: &World, frame: &mut [u8]) {
     for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-        let x = i as isize % world.size.w as isize;
-        let y = i as isize / world.size.w as isize;
+        let x = i as isize % world.size.w;
+        let y = i as isize / world.size.w;
 
-        if world.cells.is_alive(y as isize, x as isize) {
+        if world.cells.is_alive(y, x) {
             pixel.copy_from_slice(&Rgba::WHITE.as_slice());
         } else {
             if let Cell::Dead(c) = world.cells.vec[y as usize][x as usize] {
