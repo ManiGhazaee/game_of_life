@@ -1,4 +1,5 @@
 use std::{
+    env::args,
     io::stdin,
     time::{Duration, Instant},
 };
@@ -14,20 +15,39 @@ use winit::{
 use winit_input_helper::WinitInputHelper;
 
 fn main() {
-    let mut width = String::new();
-    let mut height = String::new();
-    let mut tick_len = String::new();
+    let args: Vec<String> = args().collect();
+    let width = args.get(1).map(|s| s.to_owned()).unwrap_or_default();
+    let height = args.get(2).map(|s| s.to_owned()).unwrap_or_default();
+    let tick_len = args.get(3).map(|s| s.to_owned()).unwrap_or_default();
 
-    println!("Enter Width: ");
-    stdin().read_line(&mut width).unwrap();
-    println!("Enter Hight: ");
-    stdin().read_line(&mut height).unwrap();
-    println!("Enter Tick Length (seconds): ");
-    stdin().read_line(&mut tick_len).unwrap();
+    let params: Vec<String> = [width, height, tick_len]
+        .into_iter()
+        .enumerate()
+        .map(|(i, mut string)| {
+            if string.is_empty() {
+                match i {
+                    0 => {
+                        println!("Enter Width: ");
+                        stdin().read_line(&mut string).unwrap();
+                    }
+                    1 => {
+                        println!("Enter Hight: ");
+                        stdin().read_line(&mut string).unwrap();
+                    }
+                    2 => {
+                        println!("Enter Tick Length (seconds): ");
+                        stdin().read_line(&mut string).unwrap();
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            string
+        })
+        .collect();
 
-    let width: isize = width.trim().parse().unwrap();
-    let height: isize = height.trim().parse().unwrap();
-    let tick_len: f64 = tick_len.trim().parse().unwrap();
+    let width: isize = params[0].trim().parse().unwrap();
+    let height: isize = params[1].trim().parse().unwrap();
+    let tick_len: f64 = params[2].trim().parse().unwrap();
 
     let mut input = WinitInputHelper::new();
     let event_loop = EventLoop::new();
@@ -72,10 +92,20 @@ fn main() {
                 world.cells.clear();
             }
             if input.key_pressed(VirtualKeyCode::S) {
-                world.tick_len += Duration::from_secs_f64(0.05);
+                if world.tick_len > Duration::from_secs_f64(1.) {
+                    world.tick_len += Duration::from_secs_f64(1.);
+                } else if world.tick_len > Duration::from_secs_f64(0.5) {
+                    world.tick_len += Duration::from_secs_f64(0.5);
+                } else {
+                    world.tick_len += Duration::from_secs_f64(0.05);
+                }
             }
             if input.key_pressed(VirtualKeyCode::W) {
-                if world.tick_len > Duration::from_secs_f64(0.05) {
+                if world.tick_len > Duration::from_secs_f64(1.) {
+                    world.tick_len -= Duration::from_secs_f64(1.);
+                } else if world.tick_len > Duration::from_secs_f64(0.5) {
+                    world.tick_len -= Duration::from_secs_f64(0.5);
+                } else if world.tick_len > Duration::from_secs_f64(0.05) {
                     world.tick_len -= Duration::from_secs_f64(0.05);
                 } else if world.tick_len > Duration::from_secs_f64(0.001) {
                     world.tick_len -= Duration::from_secs_f64(0.001);
@@ -95,6 +125,9 @@ fn main() {
 
             if (input.mouse_pressed(0) || input.mouse_held(0)) && !world.cells.is_alive(my, mx) {
                 world.cells.make_alive(my, mx);
+            }
+            if (input.mouse_pressed(1) || input.mouse_held(1)) && world.cells.is_alive(my, mx) {
+                world.cells.make_dead(my, mx);
             }
 
             if let Some(size) = input.window_resized() {
@@ -224,7 +257,7 @@ impl World {
         let mut rng = rand::thread_rng();
         for i in cells_vec.iter_mut() {
             for j in i.iter_mut() {
-                if rng.gen::<u8>() < 10 {
+                if rng.gen::<u8>() < 32 {
                     *j = Cell::Alive;
                 }
             }
