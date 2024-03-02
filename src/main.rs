@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use game_of_life::Rgba;
+use game_of_life::{MixedRgba, Rgba, Size};
 use pixels::{Pixels, SurfaceTexture};
 use rand::Rng;
 use winit::{
@@ -130,6 +130,28 @@ fn main() {
                 world.cells.make_dead(my, mx);
             }
 
+            if input.key_pressed(VirtualKeyCode::Key0) {
+                world.heat_color = MixedRgba(Rgba::BLACK, Rgba::BLACK);
+            }
+            if input.key_pressed(VirtualKeyCode::Key1) {
+                world.heat_color = MixedRgba(Rgba::BLUE.with_alpha(0), Rgba::CYAN);
+            }
+            if input.key_pressed(VirtualKeyCode::Key2) {
+                world.heat_color = MixedRgba(Rgba::RED.with_alpha(0), Rgba::ORANGE);
+            }
+            if input.key_pressed(VirtualKeyCode::Key3) {
+                world.heat_color = MixedRgba(Rgba::GREEN.with_alpha(0), Rgba::YELLOW);
+            }
+            if input.key_pressed(VirtualKeyCode::Key4) {
+                world.heat_color = MixedRgba(Rgba::BLUE.with_alpha(0), Rgba::PURPLE);
+            }
+            if input.key_pressed(VirtualKeyCode::Key5) {
+                world.heat_color = MixedRgba(Rgba::PURPLE.with_alpha(0), Rgba::PINK);
+            }
+            if input.key_pressed(VirtualKeyCode::Key6) {
+                world.heat_color = MixedRgba(Rgba::TEAL.with_alpha(0), Rgba::GREEN);
+            }
+
             if let Some(size) = input.window_resized() {
                 if pixels.resize_surface(size.width, size.height).is_err() {
                     *control_flow = ControlFlow::Exit;
@@ -142,28 +164,18 @@ fn main() {
     });
 }
 
-struct Size<T> {
-    w: T,
-    h: T,
-}
-
-impl<T> Size<T> {
-    fn new(w: T, h: T) -> Self {
-        Self { w, h }
-    }
-}
-
 #[derive(Clone)]
 enum Cell {
-    Dead,
+    /// Heat
+    Dead(u8),
     Alive,
 }
 
 impl Cell {
     fn filp(&mut self) {
         *self = match self {
-            Cell::Dead => Cell::Alive,
-            Cell::Alive => Cell::Dead,
+            Cell::Dead(_) => Cell::Alive,
+            Cell::Alive => Cell::Dead(u8::MAX),
         }
     }
 }
@@ -179,7 +191,7 @@ impl Cells {
             Some(row) => match row.get(j as usize) {
                 Some(c) => match c {
                     Cell::Alive => 1,
-                    Cell::Dead => 0,
+                    Cell::Dead(_) => 0,
                 },
                 None => 0,
             },
@@ -194,7 +206,7 @@ impl Cells {
             Some(row) => match row.get_mut(j as usize) {
                 Some(c) => match c {
                     Cell::Alive => (),
-                    Cell::Dead => *c = Cell::Alive,
+                    Cell::Dead(_) => *c = Cell::Alive,
                 },
                 None => (),
             },
@@ -205,8 +217,8 @@ impl Cells {
         match self.vec.get_mut(i as usize) {
             Some(row) => match row.get_mut(j as usize) {
                 Some(c) => match c {
-                    Cell::Alive => *c = Cell::Dead,
-                    Cell::Dead => (),
+                    Cell::Alive => *c = Cell::Dead(u8::MIN),
+                    Cell::Dead(_) => (),
                 },
                 None => (),
             },
@@ -237,7 +249,6 @@ impl Cells {
 }
 
 enum WorldState {
-    Initial,
     Running,
     Paused,
 }
@@ -247,12 +258,13 @@ struct World {
     state: WorldState,
     size: Size<isize>,
     cells: Cells,
+    heat_color: MixedRgba,
 }
 
 impl World {
     fn new(size: Size<isize>, tick_len: Duration) -> Self {
         let mut cells_vec: Vec<Vec<Cell>> =
-            vec![vec![Cell::Dead; size.w as usize]; size.h as usize];
+            vec![vec![Cell::Dead(u8::MIN); size.w as usize]; size.h as usize];
 
         let mut rng = rand::thread_rng();
         for i in cells_vec.iter_mut() {
@@ -269,6 +281,7 @@ impl World {
             state: WorldState::Paused,
             size,
             cells: Cells { vec: cells_vec },
+            heat_color: MixedRgba(Rgba::BLACK, Rgba::BLACK),
         }
     }
     fn update(&mut self) {
@@ -286,16 +299,15 @@ impl World {
         for i in 0..self.cells.vec.len() {
             for j in 0..row_len {
                 let alive_neighbors = self.cells.alive_neighbors(i as isize, j as isize);
-                if alive_neighbors < 2 {
-                    if let Cell::Alive = self.cells.vec[i][j] {
+                let cell = &mut self.cells.vec[i][j];
+                if let Cell::Dead(c) = cell {
+                    if alive_neighbors == 3 {
                         to_flip.push((i, j));
+                    } else if *c >= 2 {
+                        *c -= 2;
                     }
-                } else if alive_neighbors > 3 {
-                    if let Cell::Alive = self.cells.vec[i][j] {
-                        to_flip.push((i, j));
-                    }
-                } else if alive_neighbors == 3 {
-                    if let Cell::Dead = self.cells.vec[i][j] {
+                } else {
+                    if alive_neighbors < 2 || alive_neighbors > 3 {
                         to_flip.push((i, j));
                     }
                 }
@@ -328,7 +340,9 @@ fn draw(world: &World, frame: &mut [u8]) {
         if world.cells.is_alive(y as isize, x as isize) {
             pixel.copy_from_slice(&Rgba::WHITE.as_slice());
         } else {
-            pixel.copy_from_slice(&Rgba::BLACK.as_slice());
+            if let Cell::Dead(c) = world.cells.vec[y as usize][x as usize] {
+                pixel.copy_from_slice(&world.heat_color.as_rgba(c).as_slice());
+            };
         }
     }
 }
